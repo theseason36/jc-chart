@@ -1505,7 +1505,7 @@
       const [base, quote] = d.symbol.split('/');
       // 거래가 뜸한 마켓은 last_trade_price가 0으로 오는 경우가 있어 mark_price로 대체
       const price = (+d.last_trade_price || 0) > 0 ? +d.last_trade_price : +d.mark_price;
-      if (!(price > 0) || d.status !== 'active') return null;
+      if (d.status !== 'active') return null;
       this.marketIdBySymbol[d.symbol] = d.market_id;
       return {
         id: 'lighter:' + d.market_id, exchange: 'lighter', symbol: d.symbol, base, quote,
@@ -1515,14 +1515,14 @@
 
     async markets() {
       const rows = await this.get('/api/v1/orderBookDetails');
-      const list = rows && rows.order_book_details;
+      const list = rows && rows.spot_order_book_details;
       return (list || []).filter((d) => d.market_type === 'spot').map((d) => this.toMarket(d)).filter(Boolean);
     },
     async ticker(symbol) {
       // market_id로 필터링해 달라고 요청해도 서버가 무시하고 전체를 돌려주는 것으로 확인됨
       // -> 전체를 받아서 우리가 직접 찾음 (markets()와 동일한 호출, 캐싱 없이 매번 최신화)
       const rows = await this.get('/api/v1/orderBookDetails');
-      const list = rows && rows.order_book_details;
+      const list = rows && rows.spot_order_book_details;
       const d = (list || []).find((x) => x.symbol === symbol);
       return this.toMarket(d);
     },

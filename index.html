@@ -168,6 +168,73 @@
   #settings-btn svg { width: 13px; height: 13px; }
   #settings-btn:active { color: var(--teal-deep); border-color: var(--teal-deep); }
   #settings-panel { top: 40px; margin-top: 0; z-index: 9; }
+  .osc-legend {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    z-index: 8;
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sub);
+    white-space: nowrap;
+    text-shadow: -1px -1px 0 var(--panel), 1px -1px 0 var(--panel), -1px 1px 0 var(--panel), 1px 1px 0 var(--panel), 0 0 3px var(--panel);
+  }
+  .osc-legend b { font-weight: 800; }
+  #osc-settings-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sub);
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-left: 2px;
+  }
+  #osc-settings-btn svg { width: 11px; height: 11px; }
+  #osc-settings-btn:active { color: var(--teal-deep); border-color: var(--teal-deep); }
+  #osc-settings-panel { top: 34px; margin-top: 0; z-index: 9; }
+  .wt-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13px; }
+  .wt-row label { width: 30px; color: var(--sub); font-weight: 700; flex-shrink: 0; }
+  .shape-toggle { display: flex; gap: 4px; flex: 1; }
+  .shape-btn {
+    flex: 1;
+    text-align: center;
+    padding: 6px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--sub);
+  }
+  .shape-btn.active { background: var(--teal-deep); border-color: var(--teal-deep); color: #fff; }
+  .wt-size {
+    width: 40px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--ink);
+    padding: 5px 6px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .wt-color {
+    width: 34px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: none;
+    padding: 2px;
+    flex-shrink: 0;
+  }
 
   /* ---------- dropdown panels ---------- */
   .dropdown-panel {
@@ -304,7 +371,15 @@
   #settings-apply { background: var(--teal-deep); border-color: var(--teal-deep); color: #fff; }
 
   /* ---------- chart ---------- */
-  #chart-container { flex: 1; position: relative; min-height: 0; background: var(--panel); }
+  .chart-stack { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  #chart-container { flex: 1.7; position: relative; min-height: 0; background: var(--panel); }
+  #indicator-container {
+    flex: 1;
+    min-height: 130px;
+    position: relative;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
   .quote-badge {
     position: absolute;
     top: 8px;
@@ -421,38 +496,103 @@
 
   </header>
 
-  <div id="chart-container">
-    <div class="chart-legend">
-      <div class="legend">
-        <span>이동평균선</span>
-        <span id="num-1">20</span>
-        <span id="num-2">60</span>
-        <span id="num-3">120</span>
+  <div class="chart-stack">
+    <div id="chart-container">
+      <div class="chart-legend">
+        <div class="legend">
+          <span>이동평균선</span>
+          <span id="num-1">20</span>
+          <span id="num-2">60</span>
+          <span id="num-3">120</span>
+        </div>
+        <button id="settings-btn" aria-label="이평선 설정">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 7h9"/><path d="M17 7h3"/><circle cx="14" cy="7" r="2.4"/>
+            <path d="M4 12h3"/><path d="M11 12h9"/><circle cx="8" cy="12" r="2.4"/>
+            <path d="M4 17h9"/><path d="M17 17h3"/><circle cx="14" cy="17" r="2.4"/>
+          </svg>
+        </button>
       </div>
-      <button id="settings-btn" aria-label="이평선 설정">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 7h9"/><path d="M17 7h3"/><circle cx="14" cy="7" r="2.4"/>
-          <path d="M4 12h3"/><path d="M11 12h9"/><circle cx="8" cy="12" r="2.4"/>
-          <path d="M4 17h9"/><path d="M17 17h3"/><circle cx="14" cy="17" r="2.4"/>
-        </svg>
-      </button>
+      <div id="settings-panel" class="dropdown-panel hidden">
+        <div class="settings-header">
+          <span>이동평균 설정</span>
+          <button id="settings-close" aria-label="닫기">✕</button>
+        </div>
+        <div class="ma-row"><label>MA 1</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
+        <div class="ma-row"><label>MA 2</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
+        <div class="ma-row"><label>MA 3</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
+        <div class="settings-actions">
+          <button id="settings-reset">기본값</button>
+          <button id="settings-apply">적용</button>
+        </div>
+      </div>
+      <span class="quote-badge" id="quote-label"></span>
+      <div id="loading" class="loading hidden">불러오는 중…</div>
+      <div id="toast" class="toast hidden"></div>
     </div>
-    <div id="settings-panel" class="dropdown-panel hidden">
-      <div class="settings-header">
-        <span>이동평균 설정</span>
-        <button id="settings-close" aria-label="닫기">✕</button>
+
+    <div id="indicator-container">
+      <div class="osc-legend" id="osc-legend">
+        <span>JcWT</span>
+        <b id="osc-1d"></b>
+        <b id="osc-3d"></b>
+        <b id="osc-1w"></b>
+        <b id="osc-1m"></b>
+        <button id="osc-settings-btn" aria-label="지표 설정">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 7h9"/><path d="M17 7h3"/><circle cx="14" cy="7" r="2.4"/>
+            <path d="M4 12h3"/><path d="M11 12h9"/><circle cx="8" cy="12" r="2.4"/>
+            <path d="M4 17h9"/><path d="M17 17h3"/><circle cx="14" cy="17" r="2.4"/>
+          </svg>
+        </button>
       </div>
-      <div class="ma-row"><label>MA 1</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
-      <div class="ma-row"><label>MA 2</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
-      <div class="ma-row"><label>MA 3</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
-      <div class="settings-actions">
-        <button id="settings-reset">기본값</button>
-        <button id="settings-apply">적용</button>
+      <div id="osc-settings-panel" class="dropdown-panel hidden">
+        <div class="settings-header">
+          <span>JcWT 표시 설정</span>
+          <button id="osc-settings-close" aria-label="닫기">✕</button>
+        </div>
+        <div class="wt-row" data-key="d1">
+          <label>1D</label>
+          <div class="shape-toggle">
+            <button class="shape-btn" data-shape="line">선</button>
+            <button class="shape-btn" data-shape="circle">서클</button>
+          </div>
+          <input type="number" class="wt-size" min="1" max="6" step="1" inputmode="numeric" />
+          <input type="color" class="wt-color" />
+        </div>
+        <div class="wt-row" data-key="d3">
+          <label>3D</label>
+          <div class="shape-toggle">
+            <button class="shape-btn" data-shape="line">선</button>
+            <button class="shape-btn" data-shape="circle">서클</button>
+          </div>
+          <input type="number" class="wt-size" min="1" max="6" step="1" inputmode="numeric" />
+          <input type="color" class="wt-color" />
+        </div>
+        <div class="wt-row" data-key="w1">
+          <label>1W</label>
+          <div class="shape-toggle">
+            <button class="shape-btn" data-shape="line">선</button>
+            <button class="shape-btn" data-shape="circle">서클</button>
+          </div>
+          <input type="number" class="wt-size" min="1" max="6" step="1" inputmode="numeric" />
+          <input type="color" class="wt-color" />
+        </div>
+        <div class="wt-row" data-key="m1">
+          <label>1M</label>
+          <div class="shape-toggle">
+            <button class="shape-btn" data-shape="line">선</button>
+            <button class="shape-btn" data-shape="circle">서클</button>
+          </div>
+          <input type="number" class="wt-size" min="1" max="6" step="1" inputmode="numeric" />
+          <input type="color" class="wt-color" />
+        </div>
+        <div class="settings-actions">
+          <button id="osc-settings-reset">기본값</button>
+          <button id="osc-settings-apply">적용</button>
+        </div>
       </div>
     </div>
-    <span class="quote-badge" id="quote-label"></span>
-    <div id="loading" class="loading hidden">불러오는 중…</div>
-    <div id="toast" class="toast hidden"></div>
   </div>
 
   <div id="tf-row">
@@ -526,11 +666,53 @@
       vertLines: { color: 'rgba(36,48,43,0.05)' },
       horzLines: { color: 'rgba(36,48,43,0.05)' },
     },
-    rightPriceScale: { borderColor: '#EBE3D0', scaleMargins: { top: 0.14, bottom: 0.06 } },
+    rightPriceScale: { borderColor: '#EBE3D0', scaleMargins: { top: 0.10, bottom: 0.06 }, minimumWidth: 76 },
+    timeScale: { borderColor: '#EBE3D0', timeVisible: false, visible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    autoSize: true,
+  });
+
+  // 오실레이터 전용 별도 차트 (진짜 하단 패널처럼 보이도록 캔들 차트와 분리)
+  const oscChart = LightweightCharts.createChart($('indicator-container'), {
+    layout: {
+      background: { color: 'transparent' },
+      textColor: '#8A8778',
+      fontFamily: "'Gowun Dodum', 'Apple SD Gothic Neo', sans-serif",
+    },
+    grid: {
+      vertLines: { color: 'rgba(36,48,43,0.05)' },
+      horzLines: { color: 'rgba(36,48,43,0.05)' },
+    },
+    rightPriceScale: { borderColor: '#EBE3D0', scaleMargins: { top: 0.12, bottom: 0.12 }, minimumWidth: 76 },
     timeScale: { borderColor: '#EBE3D0', timeVisible: false },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     autoSize: true,
   });
+
+  // 두 차트의 시간축(줌/스크롤)을 서로 맞춤
+  let syncingRange = false;
+  function linkTimeScales(a, b) {
+    a.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (syncingRange || !range) return;
+      syncingRange = true;
+      b.timeScale().setVisibleLogicalRange(range);
+      syncingRange = false;
+    });
+  }
+  linkTimeScales(chart, oscChart);
+  linkTimeScales(oscChart, chart);
+
+  // 크로스헤어(세로선)도 서로 맞춤 - 캔들과 지표를 같은 시점으로 대조할 수 있게 (아래 wt1DSeries 생성 뒤에서 연결)
+  let syncingCrosshair = false;
+  function linkCrosshair(sourceChart, targetChart, targetSeries) {
+    sourceChart.subscribeCrosshairMove((param) => {
+      if (syncingCrosshair) return;
+      syncingCrosshair = true;
+      if (param.time) targetChart.setCrosshairPosition(0, param.time, targetSeries);
+      else targetChart.clearCrosshairPosition();
+      syncingCrosshair = false;
+    });
+  }
 
   const candleSeries = chart.addCandlestickSeries({
     upColor: '#E4573D',
@@ -538,6 +720,227 @@
     borderVisible: false,
     wickUpColor: '#E4573D',
     wickDownColor: '#2E7D74',
+  });
+
+  // -----------------------------------------------------------------
+  // 3-1) JcStr_V2.3 (WaveTrend 멀티 타임프레임) - Pine Script 이식
+  //   원본은 request.security로 3D/1W/1M 값을 가져오지만, 여기선 일봉을
+  //   앱에서 직접 3일/주/월 단위로 합산해 계산합니다. 트레이딩뷰의 정확한
+  //   3D 봉 기준일과는 다를 수 있어요 (데이터 시작일부터 3개씩 순서대로 묶음).
+  // -----------------------------------------------------------------
+  const WT_N1 = 9, WT_N2 = 21;
+  const WT_ALPHA1 = 2 / (WT_N1 + 1), WT_ALPHA2 = 2 / (WT_N2 + 1);
+
+  function emaSeries(values, period) {
+    const alpha = 2 / (period + 1);
+    const out = new Array(values.length);
+    out[0] = values[0];
+    for (let i = 1; i < values.length; i++) out[i] = alpha * values[i] + (1 - alpha) * out[i - 1];
+    return out;
+  }
+
+  /** 같은 타임프레임에서 바로 계산 (일봉 → 1D 라인) */
+  function computeWtSameTf(data) {
+    const ap = data.map((d) => (d.high + d.low + d.close) / 3);
+    const esa = emaSeries(ap, WT_N1);
+    const dev = emaSeries(ap.map((v, i) => Math.abs(v - esa[i])), WT_N1);
+    const ci = ap.map((v, i) => (dev[i] === 0 ? 0 : (v - esa[i]) / (0.015 * dev[i])));
+    const wt = emaSeries(ci, WT_N2);
+    return data.map((bar, i) => ({ time: bar.time, value: wt[i] }));
+  }
+
+  /**
+   * 상위 타임프레임(3D/1W/1M)을 일봉 데이터에서 직접 합산하며 계산.
+   * 진행 중인 봉은 그날그날 값이 갱신되고(트레이딩뷰 실시간 표시와 동일한 방식),
+   * 봉이 바뀌는 시점에만 EMA 상태가 확정(commit)됩니다.
+   */
+  function computeWtHigherTf(data, periodKeyFn) {
+    let closedEsa = null, closedD = null, closedWt = null;
+    let curKey = null, curH = 0, curL = 0, curC = 0;
+    const out = new Array(data.length);
+
+    const step = (h, l, c, seedEsa, seedD, seedWt) => {
+      const ap = (h + l + c) / 3;
+      let esa, dev;
+      if (seedEsa === null) { esa = ap; dev = 0; }
+      else { esa = WT_ALPHA1 * ap + (1 - WT_ALPHA1) * seedEsa; dev = WT_ALPHA1 * Math.abs(ap - esa) + (1 - WT_ALPHA1) * seedD; }
+      const ci = dev === 0 ? 0 : (ap - esa) / (0.015 * dev);
+      const wt = seedWt === null ? ci : WT_ALPHA2 * ci + (1 - WT_ALPHA2) * seedWt;
+      return { esa, dev, wt };
+    };
+
+    for (let i = 0; i < data.length; i++) {
+      const bar = data[i];
+      const key = periodKeyFn(bar, i);
+      if (key !== curKey) {
+        if (curKey !== null) {
+          const committed = step(curH, curL, curC, closedEsa, closedD, closedWt);
+          closedEsa = committed.esa; closedD = committed.dev; closedWt = committed.wt;
+        }
+        curKey = key; curH = bar.high; curL = bar.low; curC = bar.close;
+      } else {
+        curH = Math.max(curH, bar.high); curL = Math.min(curL, bar.low); curC = bar.close;
+      }
+      const live = step(curH, curL, curC, closedEsa, closedD, closedWt);
+      out[i] = { time: bar.time, value: live.wt };
+    }
+    return out;
+  }
+
+  function isoWeekKey(bar) {
+    const d = new Date(bar.time * 1000);
+    const dow = (d.getUTCDay() + 6) % 7; // 월=0 ... 일=6
+    const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow));
+    return monday.toISOString().slice(0, 10);
+  }
+  function monthKey(bar) {
+    const d = new Date(bar.time * 1000);
+    return d.getUTCFullYear() * 12 + d.getUTCMonth();
+  }
+
+  let WT = { d1: [], d3: [], w1: [], m1: [] };
+  function computeWaveTrend() {
+    if (!ALL_DATA.length) { WT = { d1: [], d3: [], w1: [], m1: [] }; return; }
+    WT = {
+      d1: computeWtSameTf(ALL_DATA),
+      d3: computeWtHigherTf(ALL_DATA, (bar, i) => Math.floor(i / 3)),
+      w1: computeWtHigherTf(ALL_DATA, isoWeekKey),
+      m1: computeWtHigherTf(ALL_DATA, monthKey),
+    };
+  }
+
+  const wt1DSeries = oscChart.addLineSeries({
+    color: '#FF7A00', lineWidth: 2,
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+    priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
+  });
+  const wt3DSeries = oscChart.addLineSeries({
+    color: '#2F6FE0', lineWidth: 2,
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+  });
+  const wt1WSeries = oscChart.addLineSeries({
+    color: '#24302B', lineWidth: 2,
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+  });
+  const wt1MSeries = oscChart.addBaselineSeries({
+    baseValue: { type: 'price', price: 0 },
+    topLineColor: '#D9A441', bottomLineColor: '#D9A441', lineWidth: 2,
+    topFillColor1: 'rgba(228,52,42,0.14)', topFillColor2: 'rgba(228,52,42,0.02)',
+    bottomFillColor1: 'rgba(47,111,224,0.02)', bottomFillColor2: 'rgba(47,111,224,0.14)',
+    priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+  });
+
+  linkCrosshair(chart, oscChart, wt1DSeries);
+  linkCrosshair(oscChart, chart, candleSeries);
+
+  // hline: 매수/매도 단계선 + 0선 (Pine의 hline 대응)
+  const OSC_LINE_STYLE = { dotted: LightweightCharts.LineStyle.Dotted, dashed: LightweightCharts.LineStyle.Dashed, solid: LightweightCharts.LineStyle.Solid };
+  [
+    [-60, '#2F6FE0', 'dotted'], [-80, '#2F6FE0', 'dashed'], [-100, '#2F6FE0', 'solid'],
+    [60, '#E5342A', 'dotted'], [80, '#E5342A', 'dashed'], [100, '#E5342A', 'solid'],
+  ].forEach(([price, color, style]) => {
+    wt1DSeries.createPriceLine({ price, color, lineStyle: OSC_LINE_STYLE[style], lineWidth: 1, axisLabelVisible: false, title: '' });
+  });
+  wt1DSeries.createPriceLine({ price: 0, color: 'rgba(36,48,43,0.35)', lineStyle: OSC_LINE_STYLE.solid, lineWidth: 1, axisLabelVisible: true, title: '' });
+
+  function refreshOscLegend() {
+    const last = (arr) => (arr.length ? arr[arr.length - 1].value.toFixed(1) : '--');
+    $('osc-1d').textContent = last(WT.d1);
+    $('osc-3d').textContent = last(WT.d3);
+    $('osc-1w').textContent = last(WT.w1);
+    $('osc-1m').textContent = last(WT.m1);
+  }
+
+  // -----------------------------------------------------------------
+  // 3-2) JcWT 표시 설정 (색상 / 모양: 선 or 서클) - 이동평균 설정과 같은 저장 방식
+  // -----------------------------------------------------------------
+  const DEFAULT_WT_STYLE = [
+    { key: 'd1', label: '1D', color: '#FF7A00', shape: 'line', size: 2 },
+    { key: 'd3', label: '3D', color: '#2F6FE0', shape: 'line', size: 2 },
+    { key: 'w1', label: '1W', color: '#24302B', shape: 'line', size: 2 },
+    { key: 'm1', label: '1M', color: '#D9A441', shape: 'line', size: 2 },
+  ];
+  function loadWtStyle() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('wt-style-v1'));
+      if (Array.isArray(parsed) && parsed.length === 4) {
+        return parsed.map((cfg, i) => ({ size: DEFAULT_WT_STYLE[i].size, ...cfg }));
+      }
+    } catch (e) { /* ignore */ }
+    return DEFAULT_WT_STYLE.map((s) => ({ ...s }));
+  }
+  function saveWtStyle() {
+    try { localStorage.setItem('wt-style-v1', JSON.stringify(wtStyle)); } catch (e) { /* ignore */ }
+  }
+  let wtStyle = loadWtStyle();
+  const wtSeriesByKey = { d1: wt1DSeries, d3: wt3DSeries, w1: wt1WSeries, m1: wt1MSeries };
+  const wtLegendElByKey = { d1: 'osc-1d', d3: 'osc-3d', w1: 'osc-1w', m1: 'osc-1m' };
+
+  function applyWtStyle() {
+    wtStyle.forEach((cfg) => {
+      const series = wtSeriesByKey[cfg.key];
+      const isCircle = cfg.shape === 'circle';
+      const size = Number(cfg.size) > 0 ? Number(cfg.size) : 2;
+      const opts = { lineVisible: !isCircle, pointMarkersVisible: isCircle, pointMarkersRadius: size, lineWidth: size };
+      if (cfg.key === 'm1') series.applyOptions({ ...opts, topLineColor: cfg.color, bottomLineColor: cfg.color });
+      else series.applyOptions({ ...opts, color: cfg.color });
+
+      const legendId = wtLegendElByKey[cfg.key];
+      if (legendId) $(legendId).style.color = cfg.color;
+    });
+  }
+  applyWtStyle();
+
+  const oscSettingsBtn = $('osc-settings-btn');
+  const oscSettingsPanel = $('osc-settings-panel');
+  const wtRows = Array.from(document.querySelectorAll('.wt-row'));
+
+  function fillWtPanel() {
+    wtRows.forEach((row) => {
+      const cfg = wtStyle.find((s) => s.key === row.dataset.key);
+      row.querySelector('.wt-color').value = cfg.color;
+      row.querySelector('.wt-size').value = cfg.size;
+      row.querySelectorAll('.shape-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.shape === cfg.shape);
+      });
+    });
+  }
+  wtRows.forEach((row) => {
+    row.querySelectorAll('.shape-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        row.querySelectorAll('.shape-btn').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  });
+
+  oscSettingsBtn.addEventListener('click', () => {
+    fillWtPanel();
+    openPanel('osc-settings-panel');
+  });
+  $('osc-settings-close').addEventListener('click', closePanels);
+  $('osc-settings-apply').addEventListener('click', () => {
+    wtStyle = wtRows.map((row) => {
+      let size = parseInt(row.querySelector('.wt-size').value, 10);
+      if (!Number.isFinite(size) || size < 1) size = 1;
+      if (size > 6) size = 6;
+      return {
+        key: row.dataset.key,
+        label: DEFAULT_WT_STYLE.find((s) => s.key === row.dataset.key).label,
+        color: row.querySelector('.wt-color').value,
+        shape: row.querySelector('.shape-btn.active').dataset.shape,
+        size,
+      };
+    });
+    saveWtStyle();
+    applyWtStyle();
+    closePanels();
+  });
+  $('osc-settings-reset').addEventListener('click', () => {
+    wtStyle = DEFAULT_WT_STYLE.map((s) => ({ ...s }));
+    saveWtStyle();
+    applyWtStyle();
+    fillWtPanel();
   });
 
   const DEFAULT_MA = [
@@ -598,6 +1001,7 @@
     if (!ALL_DATA.length) {
       candleSeries.setData([]);
       maSeries.forEach((s) => s.setData([]));
+      wt1DSeries.setData([]); wt3DSeries.setData([]); wt1WSeries.setData([]); wt1MSeries.setData([]);
       return;
     }
     const sliced = ALL_DATA.slice(-days);
@@ -606,7 +1010,14 @@
     maSettings.forEach((cfg, i) => {
       maSeries[i].setData(calcSMA(ALL_DATA, cfg.period).filter((d) => d.time >= startTime));
     });
+    wt1DSeries.setData(WT.d1.filter((d) => d.time >= startTime));
+    wt3DSeries.setData(WT.d3.filter((d) => d.time >= startTime));
+    wt1WSeries.setData(WT.w1.filter((d) => d.time >= startTime));
+    wt1MSeries.setData(WT.m1.filter((d) => d.time >= startTime));
+    refreshOscLegend();
     chart.timeScale().fitContent();
+    const fitted = chart.timeScale().getVisibleLogicalRange();
+    if (fitted) oscChart.timeScale().setVisibleLogicalRange(fitted);
   }
 
   document.querySelectorAll('.tf-btn').forEach((btn) => {
@@ -648,7 +1059,7 @@
   // =================================================================
   // 5) 패널 공통
   // =================================================================
-  const PANELS = ['watchlist-panel', 'favorites-panel', 'settings-panel'];
+  const PANELS = ['watchlist-panel', 'favorites-panel', 'settings-panel', 'osc-settings-panel'];
   function openPanel(id) {
     const willOpen = $(id).classList.contains('hidden');
     PANELS.forEach((p) => $(p).classList.add('hidden'));
@@ -658,9 +1069,11 @@
   function closePanels() {
     PANELS.forEach((p) => $(p).classList.add('hidden'));
   }
-  $('chart-container').addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.dropdown-panel, .chart-legend')) return;
-    closePanels();
+  ['chart-container', 'indicator-container'].forEach((id) => {
+    $(id).addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.dropdown-panel, .chart-legend')) return;
+      closePanels();
+    });
   });
 
   const STAR_FILLED = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
@@ -1047,7 +1460,77 @@
     return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
   }
 
-  const PROVIDERS = { binance: Binance, backpack: Backpack };
+  // ---------- Lighter (탈중앙 퍼프/스팟 거래소, zkSync 기반) ----------
+  const Lighter = {
+    id: 'lighter',
+    host: 'https://mainnet.zklighter.elliot.ai',
+    marketIdBySymbol: {}, // "LIT/USDC" -> 2049 (candles 조회에 필요)
+
+    get(path, params) {
+      return getJSON(this.host + path + (params ? '?' + qs(params) : ''));
+    },
+
+    toMarket(d) {
+      if (!d || !d.symbol || !d.symbol.includes('/')) return null;
+      const [base, quote] = d.symbol.split('/');
+      const price = +d.last_trade_price;
+      if (!(price > 0) || d.status !== 'active') return null;
+      this.marketIdBySymbol[d.symbol] = d.market_id;
+      return {
+        id: 'lighter:' + d.market_id, exchange: 'lighter', symbol: d.symbol, base, quote,
+        price, change: +d.daily_price_change || 0, volume: +d.daily_quote_token_volume || 0,
+      };
+    },
+
+    async markets() {
+      const rows = await this.get('/api/v1/orderBookDetails');
+      const list = rows && rows.order_book_details;
+      return (list || []).filter((d) => d.market_type === 'spot').map((d) => this.toMarket(d)).filter(Boolean);
+    },
+    async ticker(symbol) {
+      const marketId = this.marketIdBySymbol[symbol];
+      if (marketId == null) return null;
+      const rows = await this.get('/api/v1/orderBookDetails', { market_id: marketId });
+      const d = rows && rows.order_book_details && rows.order_book_details[0];
+      return this.toMarket(d);
+    },
+    async candles(symbol, limit) {
+      const marketId = this.marketIdBySymbol[symbol];
+      if (marketId == null) return [];
+      const now = Math.floor(Date.now() / 1000);
+      const count = Math.min(limit, 1500);
+      const windowSec = 500 * DAY; // 문서상 1회 최대 500개
+      const byTime = new Map();
+      let start = now - count * DAY;
+      while (start < now) {
+        const end = Math.min(start + windowSec, now);
+        const days = Math.round((end - start) / DAY);
+        const rows = await this.get('/api/v1/candles', {
+          market_id: marketId, resolution: '1d',
+          start_timestamp: start, end_timestamp: end, count_back: days,
+        });
+        this.parseCandles(rows).forEach((c) => { byTime.set(c.time, c); });
+        start = end;
+      }
+      return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-count);
+    },
+
+    /** 응답 형식이 문서에 명시돼 있지 않아, 흔한 두 가지 모양을 모두 처리 */
+    parseCandles(rows) {
+      const arr = Array.isArray(rows) ? rows : (rows && (rows.candles || rows.candlesticks)) || [];
+      return arr.map((c) => {
+        if (Array.isArray(c)) {
+          const t = c[0] > 1e12 ? Math.floor(c[0] / 1000) : Math.floor(c[0]);
+          return { time: t, open: +c[1], high: +c[2], low: +c[3], close: +c[4] };
+        }
+        const raw = c.timestamp ?? c.time ?? c.start_timestamp;
+        const t = raw > 1e12 ? Math.floor(raw / 1000) : Math.floor(raw);
+        return { time: t, open: +c.open, high: +c.high, low: +c.low, close: +c.close };
+      }).filter((c) => Number.isFinite(c.time) && c.close > 0);
+    },
+  };
+
+  const PROVIDERS = { binance: Binance, backpack: Backpack, lighter: Lighter };
 
   // =================================================================
   // 11) 목록 / 캔들 로딩
@@ -1131,6 +1614,7 @@
       ALL_DATA = candles;
       setLoading(false);
       if (ALL_DATA.length) applyPrecision(ALL_DATA[ALL_DATA.length - 1].close);
+      computeWaveTrend();
       if (silent) {
         // 새로고침 시에는 보고 있던 확대/위치 유지
         const range = chart.timeScale().getVisibleLogicalRange();

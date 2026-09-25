@@ -1257,6 +1257,12 @@
   // =================================================================
   const DAY = 86400;
 
+  function proxyBase() {
+    const cfg = window.JC_CONFIG || {};
+    const raw = String(cfg.proxy || cfg.backpackProxy || '').trim();
+    return raw.replace(/\/+$/, '');
+  }
+
   class HttpError extends Error {
     constructor(status, message) { super(message); this.status = status; }
   }
@@ -1358,9 +1364,8 @@
     metaAt: 0,
 
     hosts() {
-      const cfg = window.JC_CONFIG || {};
-      const proxy = String(cfg.backpackProxy || '').trim().replace(/\/+$/, '');
-      return proxy ? [proxy, this.direct] : [this.direct];
+      const proxy = proxyBase();
+      return proxy ? [proxy + '/backpack', this.direct] : [this.direct];
     },
 
     async get(path, params) {
@@ -1463,11 +1468,36 @@
   // ---------- Lighter (탈중앙 퍼프/스팟 거래소, zkSync 기반) ----------
   const Lighter = {
     id: 'lighter',
-    host: 'https://mainnet.zklighter.elliot.ai',
+    direct: 'https://mainnet.zklighter.elliot.ai',
+    hostIdx: 0,
     marketIdBySymbol: {}, // "LIT/USDC" -> 2049 (candles 조회에 필요)
 
-    get(path, params) {
-      return getJSON(this.host + path + (params ? '?' + qs(params) : ''));
+    hosts() {
+      const proxy = proxyBase();
+      return proxy ? [proxy + '/lighter', this.direct] : [this.direct];
+    },
+
+    async get(path, params) {
+      const hosts = this.hosts();
+      const query = params ? '?' + qs(params) : '';
+      let lastErr;
+      for (let i = 0; i < hosts.length; i++) {
+        const idx = (this.hostIdx + i) % hosts.length;
+        try {
+          const data = await getJSON(hosts[idx] + path + query);
+          this.hostIdx = idx;
+          return data;
+        } catch (e) {
+          lastErr = e;
+          if (e instanceof HttpError && (e.status === 429 || e.status === 400)) throw e;
+        }
+      }
+      if (!(lastErr instanceof HttpError)) {
+        throw new Error(hosts.length > 1
+          ? '프록시에 연결하지 못했어요. config.js 주소를 확인해 주세요.'
+          : '브라우저 직접 연결이 막혀 있어요. 프록시 설정(config.js)이 필요해요.');
+      }
+      throw lastErr;
     },
 
     toMarket(d) {

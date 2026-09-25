@@ -3,5 +3,5 @@
 // 이제 Backpack과 Lighter가 같은 Worker를 함께 씁니다 (worker.js 참고).
 // 예: proxy: 'https://jc-backpack.myname.workers.dev'
 window.JC_CONFIG = {
-  proxy: '',
+  proxy: 'https://jc-backpack.theseason36.workers.dev',
 };

@@ -2,5 +2,5 @@
 // Cloudflare Worker 주소를 따옴표 안에 넣으세요. (끝에 / 없이)
 // 예: backpackProxy: 'https://jc-backpack.myname.workers.dev'
 window.JC_CONFIG = {
-  backpackProxy: 'https://jc-backpack.theseason36.workers.dev',
+  backpackProxy: '',
 };

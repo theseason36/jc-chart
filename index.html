@@ -1527,8 +1527,12 @@
       return this.toMarket(d);
     },
     async candles(symbol, limit) {
-      const marketId = this.marketIdBySymbol[symbol];
-      if (marketId == null) return [];
+      let marketId = this.marketIdBySymbol[symbol];
+      if (marketId == null) {
+        const cached = MARKETS.find((m) => m.exchange === 'lighter' && m.symbol === symbol);
+        if (cached && /^lighter:\d+$/.test(cached.id)) marketId = Number(cached.id.split(':')[1]);
+      }
+      if (marketId == null) throw new Error('Lighter 종목 정보를 찾지 못했어요. 시세 영역을 눌러 새로고침해 주세요.');
       const now = Math.floor(Date.now() / 1000);
       const count = Math.min(limit, 1500);
       const windowSec = 500 * DAY; // 문서상 1회 최대 500개
@@ -1547,18 +1551,23 @@
       return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-count);
     },
 
-    /** 응답 형식이 문서에 명시돼 있지 않아, 흔한 두 가지 모양을 모두 처리 */
+    /** 공식 축약 응답(c 배열, t/o/h/l/c)과 기존 형식 지원 */
     parseCandles(rows) {
-      const arr = Array.isArray(rows) ? rows : (rows && (rows.candles || rows.candlesticks)) || [];
-      return arr.map((c) => {
+      if (rows && rows.code != null && Number(rows.code) !== 200) {
+        throw new Error('Lighter 캔들 조회 오류: ' + (rows.message || rows.code));
+      }
+      const arr = Array.isArray(rows) ? rows : rows && (rows.c || rows.candles || rows.candlesticks);
+      if (!Array.isArray(arr)) throw new Error('Lighter 캔들 응답 형식을 확인할 수 없어요.');
+      return arr.filter((c) => c && typeof c === 'object').map((c) => {
         if (Array.isArray(c)) {
           const t = c[0] > 1e12 ? Math.floor(c[0] / 1000) : Math.floor(c[0]);
           return { time: t, open: +c[1], high: +c[2], low: +c[3], close: +c[4] };
         }
-        const raw = c.timestamp ?? c.time ?? c.start_timestamp;
+        const raw = c.t ?? c.timestamp ?? c.time ?? c.start_timestamp;
         const t = raw > 1e12 ? Math.floor(raw / 1000) : Math.floor(raw);
-        return { time: t, open: +c.open, high: +c.high, low: +c.low, close: +c.close };
-      }).filter((c) => Number.isFinite(c.time) && c.close > 0);
+        return { time: t, open: +(c.o ?? c.open), high: +(c.h ?? c.high), low: +(c.l ?? c.low), close: +(c.c ?? c.close) };
+      }).filter((c) => Number.isFinite(c.time) && c.time > 0 &&
+        [c.open, c.high, c.low, c.close].every((v) => Number.isFinite(v) && v > 0));
     },
   };
 

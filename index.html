@@ -12,6 +12,7 @@
 <meta name="format-detection" content="telephone=no" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="config.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -82,7 +83,6 @@
   .icon-btn svg { width: 18px; height: 18px; }
   #favorites-btn { position: absolute; top: 14px; right: 16px; }
   #favorites-btn:active { color: var(--orange); border-color: var(--orange); }
-  #settings-btn:active { color: var(--teal-deep); border-color: var(--teal-deep); }
 
   .symbol-line { display: flex; align-items: center; gap: 8px; }
   .symbol {
@@ -122,26 +122,52 @@
   .price-line { display: flex; align-items: baseline; gap: 8px; margin-top: 5px; cursor: pointer; }
   .updated { font-size: 10.5px; color: var(--sub); margin-left: auto; font-weight: 700; }
   .price { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
-  .price.up, .change.up { color: var(--price-up); }
-  .price.down, .change.down { color: var(--price-down); }
+  .change.up { color: var(--price-up); }
+  .change.down { color: var(--price-down); }
   .change { font-size: 13px; font-weight: 700; color: var(--sub); }
 
-  .legend-row {
+  /* 차트 좌상단에 붙는 이평선 표시 (차트의 일부처럼) */
+  .chart-legend {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    z-index: 8;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-top: 10px;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 4px 3px 10px;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
   }
   .legend {
     display: flex;
     align-items: baseline;
     gap: 6px;
-    flex-wrap: wrap;
-    font-size: 12.5px;
+    font-size: 11.5px;
     font-weight: 700;
     color: var(--sub);
+    white-space: nowrap;
   }
+  #settings-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sub);
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #settings-btn svg { width: 13px; height: 13px; }
+  #settings-btn:active { color: var(--teal-deep); border-color: var(--teal-deep); }
+  #settings-panel { top: 40px; margin-top: 0; z-index: 9; }
 
   /* ---------- dropdown panels ---------- */
   .dropdown-panel {
@@ -393,22 +419,24 @@
       <div id="favorites-list" class="panel-list"></div>
     </div>
 
-    <div class="legend-row">
+  </header>
+
+  <div id="chart-container">
+    <div class="chart-legend">
       <div class="legend">
         <span>이동평균선</span>
         <span id="num-1">20</span>
         <span id="num-2">60</span>
         <span id="num-3">120</span>
       </div>
-      <button id="settings-btn" class="icon-btn" aria-label="이평선 설정">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <button id="settings-btn" aria-label="이평선 설정">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 7h9"/><path d="M17 7h3"/><circle cx="14" cy="7" r="2.4"/>
           <path d="M4 12h3"/><path d="M11 12h9"/><circle cx="8" cy="12" r="2.4"/>
           <path d="M4 17h9"/><path d="M17 17h3"/><circle cx="14" cy="17" r="2.4"/>
         </svg>
       </button>
     </div>
-
     <div id="settings-panel" class="dropdown-panel hidden">
       <div class="settings-header">
         <span>이동평균 설정</span>
@@ -422,9 +450,6 @@
         <button id="settings-apply">적용</button>
       </div>
     </div>
-  </header>
-
-  <div id="chart-container">
     <span class="quote-badge" id="quote-label"></span>
     <div id="loading" class="loading hidden">불러오는 중…</div>
     <div id="toast" class="toast hidden"></div>
@@ -501,7 +526,7 @@
       vertLines: { color: 'rgba(36,48,43,0.05)' },
       horzLines: { color: 'rgba(36,48,43,0.05)' },
     },
-    rightPriceScale: { borderColor: '#EBE3D0' },
+    rightPriceScale: { borderColor: '#EBE3D0', scaleMargins: { top: 0.14, bottom: 0.06 } },
     timeScale: { borderColor: '#EBE3D0', timeVisible: false },
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     autoSize: true,
@@ -562,7 +587,13 @@
     });
   }
 
-  function render(days) {
+  /** 위아래 드래그로 꺼진 가격 자동 맞춤을 다시 켬 */
+  function resetPriceScale() {
+    chart.priceScale('right').applyOptions({ autoScale: true });
+  }
+
+  function render(days, { keepView = false } = {}) {
+    if (!keepView) resetPriceScale();
     refreshLegend();
     if (!ALL_DATA.length) {
       candleSeries.setData([]);
@@ -627,7 +658,10 @@
   function closePanels() {
     PANELS.forEach((p) => $(p).classList.add('hidden'));
   }
-  $('chart-container').addEventListener('pointerdown', closePanels);
+  $('chart-container').addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.dropdown-panel, .chart-legend')) return;
+    closePanels();
+  });
 
   const STAR_FILLED = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
   const STAR_OUTLINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
@@ -903,14 +937,40 @@
   // ---------- Backpack (현물, USDC/USDT 마켓) ----------
   const Backpack = {
     id: 'backpack',
-    host: 'https://api.backpack.exchange',
+    direct: 'https://api.backpack.exchange',
+    hostIdx: 0,
     quotes: ['USDC', 'USDT'],
     includePerps: false, // 무기한 선물까지 보려면 true
     meta: null,
     metaAt: 0,
 
-    get(path, params) {
-      return getJSON(this.host + path + (params ? '?' + qs(params) : ''));
+    hosts() {
+      const cfg = window.JC_CONFIG || {};
+      const proxy = String(cfg.backpackProxy || '').trim().replace(/\/+$/, '');
+      return proxy ? [proxy, this.direct] : [this.direct];
+    },
+
+    async get(path, params) {
+      const hosts = this.hosts();
+      const query = params ? '?' + qs(params) : '';
+      let lastErr;
+      for (let i = 0; i < hosts.length; i++) {
+        const idx = (this.hostIdx + i) % hosts.length;
+        try {
+          const data = await getJSON(hosts[idx] + path + query);
+          this.hostIdx = idx;
+          return data;
+        } catch (e) {
+          lastErr = e;
+          if (e instanceof HttpError && (e.status === 429 || e.status === 418 || e.status === 400)) throw e;
+        }
+      }
+      if (!(lastErr instanceof HttpError)) {
+        throw new Error(hosts.length > 1
+          ? '프록시에 연결하지 못했어요. config.js 주소를 확인해 주세요.'
+          : '브라우저 직접 연결이 막혀 있어요. 프록시 설정(config.js)이 필요해요.');
+      }
+      throw lastErr;
     },
 
     async loadMeta() {
@@ -1074,12 +1134,13 @@
       if (silent) {
         // 새로고침 시에는 보고 있던 확대/위치 유지
         const range = chart.timeScale().getVisibleLogicalRange();
-        render(currentDays);
+        render(currentDays, { keepView: true });
         if (range) chart.timeScale().setVisibleLogicalRange(range);
       } else {
         render(currentDays);
       }
       markUpdated();
+      if ($('toast').textContent === '새로고침 중…') $('toast').classList.add('hidden');
       if (!ALL_DATA.length) showToast('이 종목은 캔들 데이터가 없어요.');
     } catch (e) {
       if (req !== candleReq) return;

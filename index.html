@@ -1281,7 +1281,14 @@
       if (!res.ok) {
         let detail = '';
         try { const body = await res.json(); detail = body.msg || body.message || ''; } catch (e) { /* ignore */ }
-        if (res.status === 429) throw new HttpError(429, '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.');
+        if (res.status === 429) {
+          const error = new HttpError(429, '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.');
+          const retryAfter = res.headers.get('Retry-After');
+          const delay = retryAfter == null ? NaN : (/^\d+(\.\d+)?$/.test(retryAfter)
+            ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now());
+          error.retryAfterMs = Number.isFinite(delay) ? Math.max(0, delay) : 60000;
+          throw error;
+        }
         if (res.status === 418) throw new HttpError(418, '요청 제한으로 잠시 차단됐어요.');
         if (res.status === 451 || res.status === 403) throw new HttpError(res.status, '이 지역/네트워크에서는 사용할 수 없어요.');
         throw new HttpError(res.status, '서버 오류 (' + res.status + ')' + (detail ? ': ' + detail : ''));
@@ -1477,7 +1484,50 @@
       return proxy ? [proxy + '/lighter', this.direct] : [this.direct];
     },
 
-    async get(path, params) {
+    requestCache: new Map(),
+    pendingRequests: new Map(),
+    requestQueue: Promise.resolve(),
+    nextRequestAt: 0,
+
+    get(path, params) {
+      const key = path + '?' + qs(params || {});
+      const cached = this.requestCache.get(key);
+      if (cached && Date.now() - cached.at < 60000) return Promise.resolve(cached.data);
+      if (this.pendingRequests.has(key)) return this.pendingRequests.get(key);
+      const request = this.requestQueue.then(async () => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const wait = Math.max(0, this.nextRequestAt - Date.now());
+          if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+          try {
+            const data = await this.fetchOnce(path, params);
+            this.nextRequestAt = Date.now() + 1200;
+            if (data && data.code != null && Number(data.code) !== 200) {
+              throw new Error('Lighter ' + path + ': ' + (data.message || data.code));
+            }
+            this.requestCache.set(key, { at: Date.now(), data });
+            if (this.requestCache.size > 32) this.requestCache.delete(this.requestCache.keys().next().value);
+            return data;
+          } catch (e) {
+            if (e instanceof HttpError && e.status === 429) {
+              const delay = Math.max(60000, e.retryAfterMs || 0);
+              this.nextRequestAt = Date.now() + delay;
+              if (attempt === 0) {
+                showToast('Lighter 요청 제한: ' + Math.ceil(delay / 1000) + '초 후 자동으로 한 번 재시도해요.');
+                continue;
+              }
+              throw new Error('Lighter ' + path + ': 요청 제한이 계속되고 있어요. 잠시 후 다시 시도해 주세요.');
+            }
+            this.nextRequestAt = Math.max(this.nextRequestAt, Date.now() + 1200);
+            throw e;
+          }
+        }
+      }).finally(() => this.pendingRequests.delete(key));
+      this.pendingRequests.set(key, request);
+      this.requestQueue = request.catch(() => {});
+      return request;
+    },
+
+    async fetchOnce(path, params) {
       const hosts = this.hosts();
       const query = params ? '?' + qs(params) : '';
       let lastErr;
@@ -1520,7 +1570,7 @@
     },
     async ticker(symbol) {
       // market_id로 필터링해 달라고 요청해도 서버가 무시하고 전체를 돌려주는 것으로 확인됨
-      // -> 전체를 받아서 우리가 직접 찾음 (markets()와 동일한 호출, 캐싱 없이 매번 최신화)
+      // 목록과 시세는 같은 응답을 60초 동안 공유하고, 동시 요청도 합침
       const rows = await this.get('/api/v1/orderBookDetails');
       const list = rows && rows.spot_order_book_details;
       const d = (list || []).find((x) => x.symbol === symbol);
@@ -1533,7 +1583,7 @@
         if (cached && /^lighter:\d+$/.test(cached.id)) marketId = Number(cached.id.split(':')[1]);
       }
       if (marketId == null) throw new Error('Lighter 종목 정보를 찾지 못했어요. 시세 영역을 눌러 새로고침해 주세요.');
-      const now = Math.floor(Date.now() / 1000);
+      const now = Math.floor(Date.now() / 60000) * 60; // 같은 분의 중복 캔들 요청 공유
       const count = Math.min(limit, 1500);
       const windowSec = 500 * DAY; // 문서상 1회 최대 500개
       const byTime = new Map();

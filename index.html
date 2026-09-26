@@ -608,7 +608,7 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const EXCHANGE_LABEL = { binance: 'Binance', backpack: 'Backpack', lighter: 'Lighter' };
+  const EXCHANGE_LABEL = { binance: 'Binance', backpack: 'Backpack', okx: 'OKX', lighter: 'Lighter' };
 
   // 상태
   let MARKETS = [];     // [{id, exchange, symbol, base, quote, price, change, volume, fav}]
@@ -1621,7 +1621,86 @@
     },
   };
 
-  const PROVIDERS = { binance: Binance, backpack: Backpack, lighter: Lighter };
+  // ---------- OKX (현물) ----------
+  const OKX = {
+    id: 'okx',
+    direct: 'https://www.okx.com',
+    hostIdx: 0,
+    quotes: ['USDT', 'USDC'],
+
+    hosts() {
+      const proxy = proxyBase();
+      return proxy ? [proxy + '/okx', this.direct] : [this.direct];
+    },
+
+    async get(path, params) {
+      const hosts = this.hosts();
+      const query = params ? '?' + qs(params) : '';
+      let lastErr;
+      for (let i = 0; i < hosts.length; i++) {
+        const idx = (this.hostIdx + i) % hosts.length;
+        try {
+          const data = await getJSON(hosts[idx] + path + query);
+          this.hostIdx = idx;
+          return data;
+        } catch (e) {
+          lastErr = e;
+          if (e instanceof HttpError && (e.status === 429 || e.status === 400)) throw e;
+        }
+      }
+      if (!(lastErr instanceof HttpError)) {
+        throw new Error(hosts.length > 1
+          ? '프록시에 연결하지 못했어요. config.js 주소를 확인해 주세요.'
+          : '브라우저 직접 연결이 막혀 있어요. 프록시 설정(config.js)이 필요해요.');
+      }
+      throw lastErr;
+    },
+
+    toMarket(d) {
+      if (!d || !d.instId || !d.instId.includes('-')) return null;
+      const [base, quote] = d.instId.split('-');
+      if (!this.quotes.includes(quote)) return null;
+      const last = +d.last;
+      const open = +d.open24h;
+      if (!(last > 0)) return null;
+      return {
+        id: 'okx:' + d.instId, exchange: 'okx', symbol: d.instId, base, quote,
+        price: last, change: open > 0 ? (last - open) / open * 100 : 0, volume: +d.volCcy24h || 0,
+      };
+    },
+
+    async markets() {
+      const rows = await this.get('/api/v5/market/tickers', { instType: 'SPOT' });
+      return (rows && rows.data || []).map((d) => this.toMarket(d)).filter(Boolean);
+    },
+    async ticker(symbol) {
+      const rows = await this.get('/api/v5/market/ticker', { instId: symbol });
+      const d = rows && rows.data && rows.data[0];
+      return this.toMarket(d);
+    },
+    async candles(symbol, limit) {
+      // history-candles로 300개씩 과거로 페이지네이션 (ts는 ms, 최신순으로 옴 -> 뒤집어야 함)
+      const count = Math.min(limit, 1500);
+      const byTime = new Map();
+      let after; // 이 시각(ms)보다 오래된 데이터를 요청
+      while (byTime.size < count) {
+        const params = { instId: symbol, bar: '1D', limit: '300' };
+        if (after) params.after = String(after);
+        const rows = await this.get('/api/v5/market/history-candles', params);
+        const data = (rows && rows.data) || [];
+        if (!data.length) break;
+        data.forEach((row) => {
+          const time = Math.floor(+row[0] / 1000);
+          byTime.set(time, { time, open: +row[1], high: +row[2], low: +row[3], close: +row[4] });
+        });
+        after = Math.min(...data.map((row) => +row[0]));
+        if (data.length < 300) break; // 더 이상 과거 데이터 없음
+      }
+      return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-count);
+    },
+  };
+
+  const PROVIDERS = { binance: Binance, backpack: Backpack, okx: OKX, lighter: Lighter };
 
   // =================================================================
   // 11) 목록 / 캔들 로딩

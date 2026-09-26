@@ -1,19 +1,15 @@
 // Jc 트레이딩 차트 - 거래소 시세 중계 (Cloudflare Worker)
 // 브라우저에서 직접 막힌 거래소 공개 시세 API를 대신 받아서 전달합니다.
-// 주소 맨 앞의 /backpack 또는 /lighter 로 어느 거래소로 보낼지 정하고,
+// 주소 맨 앞의 /backpack 또는 /okx 로 어느 거래소로 보낼지 정하고,
 // 그 뒤는 원래 API 경로 그대로 붙입니다.
 // 예) /backpack/api/v1/tickers  ->  https://api.backpack.exchange/api/v1/tickers
-//     /lighter/api/v1/candles   ->  https://mainnet.zklighter.elliot.ai/api/v1/candles
+//     /okx/api/v5/market/candles -> https://www.okx.com/api/v5/market/candles
 // 시세 조회 경로만 허용하고, 읽기(GET) 외의 요청은 모두 거절합니다.
 
 const EXCHANGES = {
   backpack: {
     upstream: 'https://api.backpack.exchange',
     allowedPaths: new Set(['/api/v1/markets', '/api/v1/tickers', '/api/v1/ticker', '/api/v1/klines']),
-  },
-  lighter: {
-    upstream: 'https://mainnet.zklighter.elliot.ai',
-    allowedPaths: new Set(['/api/v1/orderBookDetails', '/api/v1/candles']),
   },
   okx: {
     upstream: 'https://www.okx.com',
@@ -50,7 +46,7 @@ export default {
     const exchangeKey = segments[0];
     const exchange = EXCHANGES[exchangeKey];
     if (!exchange) {
-      return new Response('Not found (use /backpack/... or /lighter/...)', { status: 404, headers: cors });
+      return new Response('Not found (use /backpack/... or /okx/...)', { status: 404, headers: cors });
     }
 
     const upstreamPath = '/' + segments.slice(1).join('/');

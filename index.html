@@ -608,7 +608,7 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const EXCHANGE_LABEL = { binance: 'Binance', backpack: 'Backpack', okx: 'OKX', lighter: 'Lighter' };
+  const EXCHANGE_LABEL = { binance: 'Binance', backpack: 'Backpack', okx: 'OKX' };
 
   // 상태
   let MARKETS = [];     // [{id, exchange, symbol, base, quote, price, change, volume, fav}]
@@ -1472,154 +1472,6 @@
     return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
   }
 
-  // ---------- Lighter (탈중앙 퍼프/스팟 거래소, zkSync 기반) ----------
-  const Lighter = {
-    id: 'lighter',
-    direct: 'https://mainnet.zklighter.elliot.ai',
-    hostIdx: 0,
-    marketIdBySymbol: {}, // "LIT/USDC" -> 2049 (candles 조회에 필요)
-
-    hosts() {
-      const proxy = proxyBase();
-      return proxy ? [proxy + '/lighter', this.direct] : [this.direct];
-    },
-
-    requestCache: new Map(),
-    pendingRequests: new Map(),
-    requestQueue: Promise.resolve(),
-    nextRequestAt: 0,
-
-    get(path, params) {
-      const key = path + '?' + qs(params || {});
-      const cached = this.requestCache.get(key);
-      if (cached && Date.now() - cached.at < 60000) return Promise.resolve(cached.data);
-      if (this.pendingRequests.has(key)) return this.pendingRequests.get(key);
-      const request = this.requestQueue.then(async () => {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const wait = Math.max(0, this.nextRequestAt - Date.now());
-          if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
-          try {
-            const data = await this.fetchOnce(path, params);
-            this.nextRequestAt = Date.now() + 1200;
-            if (data && data.code != null && Number(data.code) !== 200) {
-              throw new Error('Lighter ' + path + ': ' + (data.message || data.code));
-            }
-            this.requestCache.set(key, { at: Date.now(), data });
-            if (this.requestCache.size > 32) this.requestCache.delete(this.requestCache.keys().next().value);
-            return data;
-          } catch (e) {
-            if (e instanceof HttpError && e.status === 429) {
-              const delay = Math.max(60000, e.retryAfterMs || 0);
-              this.nextRequestAt = Date.now() + delay;
-              if (attempt === 0) {
-                showToast('Lighter 요청 제한: ' + Math.ceil(delay / 1000) + '초 후 자동으로 한 번 재시도해요.');
-                continue;
-              }
-              throw new Error('Lighter ' + path + ': 요청 제한이 계속되고 있어요. 잠시 후 다시 시도해 주세요.');
-            }
-            this.nextRequestAt = Math.max(this.nextRequestAt, Date.now() + 1200);
-            throw e;
-          }
-        }
-      }).finally(() => this.pendingRequests.delete(key));
-      this.pendingRequests.set(key, request);
-      this.requestQueue = request.catch(() => {});
-      return request;
-    },
-
-    async fetchOnce(path, params) {
-      const hosts = this.hosts();
-      const query = params ? '?' + qs(params) : '';
-      let lastErr;
-      for (let i = 0; i < hosts.length; i++) {
-        const idx = (this.hostIdx + i) % hosts.length;
-        try {
-          const data = await getJSON(hosts[idx] + path + query);
-          this.hostIdx = idx;
-          return data;
-        } catch (e) {
-          lastErr = e;
-          if (e instanceof HttpError && (e.status === 429 || e.status === 400)) throw e;
-        }
-      }
-      if (!(lastErr instanceof HttpError)) {
-        throw new Error(hosts.length > 1
-          ? '프록시에 연결하지 못했어요. config.js 주소를 확인해 주세요.'
-          : '브라우저 직접 연결이 막혀 있어요. 프록시 설정(config.js)이 필요해요.');
-      }
-      throw lastErr;
-    },
-
-    toMarket(d) {
-      if (!d || !d.symbol || !d.symbol.includes('/')) return null;
-      const [base, quote] = d.symbol.split('/');
-      // 거래가 뜸한 마켓은 last_trade_price가 0으로 오는 경우가 있어 mark_price로 대체
-      const price = (+d.last_trade_price || 0) > 0 ? +d.last_trade_price : +d.mark_price;
-      if (d.status !== 'active') return null;
-      this.marketIdBySymbol[d.symbol] = d.market_id;
-      return {
-        id: 'lighter:' + d.market_id, exchange: 'lighter', symbol: d.symbol, base, quote,
-        price, change: +d.daily_price_change || 0, volume: +d.daily_quote_token_volume || 0,
-      };
-    },
-
-    async markets() {
-      const rows = await this.get('/api/v1/orderBookDetails');
-      const list = rows && rows.spot_order_book_details;
-      return (list || []).filter((d) => d.market_type === 'spot').map((d) => this.toMarket(d)).filter(Boolean);
-    },
-    async ticker(symbol) {
-      // market_id로 필터링해 달라고 요청해도 서버가 무시하고 전체를 돌려주는 것으로 확인됨
-      // 목록과 시세는 같은 응답을 60초 동안 공유하고, 동시 요청도 합침
-      const rows = await this.get('/api/v1/orderBookDetails');
-      const list = rows && rows.spot_order_book_details;
-      const d = (list || []).find((x) => x.symbol === symbol);
-      return this.toMarket(d);
-    },
-    async candles(symbol, limit) {
-      let marketId = this.marketIdBySymbol[symbol];
-      if (marketId == null) {
-        const cached = MARKETS.find((m) => m.exchange === 'lighter' && m.symbol === symbol);
-        if (cached && /^lighter:\d+$/.test(cached.id)) marketId = Number(cached.id.split(':')[1]);
-      }
-      if (marketId == null) throw new Error('Lighter 종목 정보를 찾지 못했어요. 시세 영역을 눌러 새로고침해 주세요.');
-      const now = Math.floor(Date.now() / 60000) * 60; // 같은 분의 중복 캔들 요청 공유
-      const count = Math.min(limit, 1500);
-      const windowSec = 500 * DAY; // 문서상 1회 최대 500개
-      const byTime = new Map();
-      let start = now - count * DAY;
-      while (start < now) {
-        const end = Math.min(start + windowSec, now);
-        const days = Math.round((end - start) / DAY);
-        const rows = await this.get('/api/v1/candles', {
-          market_id: marketId, resolution: '1d',
-          start_timestamp: start, end_timestamp: end, count_back: days,
-        });
-        this.parseCandles(rows).forEach((c) => { byTime.set(c.time, c); });
-        start = end;
-      }
-      return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-count);
-    },
-
-    /** 공식 축약 응답(c 배열, t/o/h/l/c)과 기존 형식 지원 */
-    parseCandles(rows) {
-      if (rows && rows.code != null && Number(rows.code) !== 200) {
-        throw new Error('Lighter 캔들 조회 오류: ' + (rows.message || rows.code));
-      }
-      const arr = Array.isArray(rows) ? rows : rows && (rows.c || rows.candles || rows.candlesticks);
-      if (!Array.isArray(arr)) throw new Error('Lighter 캔들 응답 형식을 확인할 수 없어요.');
-      return arr.filter((c) => c && typeof c === 'object').map((c) => {
-        if (Array.isArray(c)) {
-          const t = c[0] > 1e12 ? Math.floor(c[0] / 1000) : Math.floor(c[0]);
-          return { time: t, open: +c[1], high: +c[2], low: +c[3], close: +c[4] };
-        }
-        const raw = c.t ?? c.timestamp ?? c.time ?? c.start_timestamp;
-        const t = raw > 1e12 ? Math.floor(raw / 1000) : Math.floor(raw);
-        return { time: t, open: +(c.o ?? c.open), high: +(c.h ?? c.high), low: +(c.l ?? c.low), close: +(c.c ?? c.close) };
-      }).filter((c) => Number.isFinite(c.time) && c.time > 0 &&
-        [c.open, c.high, c.low, c.close].every((v) => Number.isFinite(v) && v > 0));
-    },
-  };
 
   // ---------- OKX (현물) ----------
   const OKX = {
@@ -1700,7 +1552,7 @@
     },
   };
 
-  const PROVIDERS = { binance: Binance, backpack: Backpack, okx: OKX, lighter: Lighter };
+  const PROVIDERS = { binance: Binance, backpack: Backpack, okx: OKX };
 
   // =================================================================
   // 11) 목록 / 캔들 로딩

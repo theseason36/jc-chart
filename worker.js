@@ -15,6 +15,10 @@ const EXCHANGES = {
     upstream: 'https://mainnet.zklighter.elliot.ai',
     allowedPaths: new Set(['/api/v1/orderBookDetails', '/api/v1/candles']),
   },
+  okx: {
+    upstream: 'https://www.okx.com',
+    allowedPaths: new Set(['/api/v5/market/tickers', '/api/v5/market/ticker', '/api/v5/market/candles', '/api/v5/market/history-candles']),
+  },
 };
 
 // 내 웹앱 주소만 허용하려면 '*' 대신 'https://아이디.github.io' 로 바꾸세요.

@@ -335,6 +335,26 @@
   .empty-msg { font-size: 12.5px; color: var(--sub); padding: 14px 6px; line-height: 1.5; }
   .list-hint { font-size: 11px; color: var(--sub); padding: 8px 6px 2px; }
 
+  /* ---------- chart settings panel (candle colors + MA) ---------- */
+  .settings-subhead {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sub);
+    margin: 2px 0 2px;
+  }
+  .settings-divider { border-top: 1px solid var(--border); margin: 8px 0; }
+  .color-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
+  .color-row label { width: 44px; color: var(--sub); font-weight: 700; flex-shrink: 0; }
+  .color-row input[type="color"] {
+    margin-left: auto;
+    width: 34px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: none;
+    padding: 2px;
+  }
+
   /* ---------- MA settings ---------- */
   .ma-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13px; }
   .ma-row label { width: 44px; color: var(--sub); font-weight: 700; flex-shrink: 0; }
@@ -515,9 +535,14 @@
       </div>
       <div id="settings-panel" class="dropdown-panel hidden">
         <div class="settings-header">
-          <span>이동평균 설정</span>
+          <span>차트 설정</span>
           <button id="settings-close" aria-label="닫기">✕</button>
         </div>
+        <div class="settings-subhead">캔들 · 등락률 색상</div>
+        <div class="color-row"><label>상승</label><input type="color" class="candle-color" data-key="up" /></div>
+        <div class="color-row"><label>하락</label><input type="color" class="candle-color" data-key="down" /></div>
+        <div class="settings-divider"></div>
+        <div class="settings-subhead">이동평균선</div>
         <div class="ma-row"><label>MA 1</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
         <div class="ma-row"><label>MA 2</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
         <div class="ma-row"><label>MA 3</label><input type="number" inputmode="numeric" class="ma-period" min="1" max="500" /><span>일</span><input type="color" class="ma-color" /></div>
@@ -635,6 +660,16 @@
     return (c >= 0 ? '+' : '') + c.toFixed(2) + '%';
   }
   function dirOf(c) { return c >= 0 ? 'up' : 'down'; }
+  /**
+   * 등락률을 거래소가 알려주는 24시간 기준이 아니라, 차트에 그려진 캔들의
+   * "전일 종가 대비"로 계산 (TradingView 등에서 흔히 쓰는 방식). data는 ALL_DATA.
+   * 전일 캔들이 없으면(데이터 부족) null을 반환해 호출부에서 기존 값을 쓰게 함.
+   */
+  function changeFromCandles(data, price) {
+    if (!data || data.length < 2 || !(price > 0)) return null;
+    const prevClose = data[data.length - 2].close;
+    return prevClose > 0 ? (price - prevClose) / prevClose * 100 : null;
+  }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   }
@@ -721,6 +756,32 @@
     wickUpColor: '#2E7D74',
     wickDownColor: '#E4573D',
   });
+
+  // -----------------------------------------------------------------
+  // 3-0) 캔들 · 등락률 색상 설정 (상승/하락) - 저장되고, 변경하면 캔들과 텍스트에 함께 반영
+  // -----------------------------------------------------------------
+  const DEFAULT_CANDLE_COLORS = { up: '#2E7D74', down: '#E4573D' };
+  function loadCandleColors() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('candle-colors-v1'));
+      if (parsed && parsed.up && parsed.down) return parsed;
+    } catch (e) { /* ignore */ }
+    return { ...DEFAULT_CANDLE_COLORS };
+  }
+  function saveCandleColors() {
+    try { localStorage.setItem('candle-colors-v1', JSON.stringify(candleColors)); } catch (e) { /* ignore */ }
+  }
+  let candleColors = loadCandleColors();
+
+  function applyCandleColors() {
+    candleSeries.applyOptions({
+      upColor: candleColors.up, downColor: candleColors.down,
+      wickUpColor: candleColors.up, wickDownColor: candleColors.down,
+    });
+    document.documentElement.style.setProperty('--price-up', candleColors.up);
+    document.documentElement.style.setProperty('--price-down', candleColors.down);
+  }
+  applyCandleColors();
 
   // -----------------------------------------------------------------
   // 3-1) JcStr_V2.3 (WaveTrend 멀티 타임프레임) - Pine Script 이식
@@ -1201,7 +1262,9 @@
   // 8) 이평선 설정
   // =================================================================
   const maRows = Array.from(document.querySelectorAll('.ma-row'));
+  const candleColorInputs = Array.from(document.querySelectorAll('.candle-color'));
   function fillMaPanel() {
+    candleColorInputs.forEach((input) => { input.value = candleColors[input.dataset.key]; });
     maRows.forEach((row, i) => {
       row.querySelector('.ma-period').value = maSettings[i].period;
       row.querySelector('.ma-color').value = maSettings[i].color;
@@ -1220,6 +1283,12 @@
   });
   $('settings-close').addEventListener('click', closePanels);
   $('settings-apply').addEventListener('click', () => {
+    candleColors = {
+      up: document.querySelector('.candle-color[data-key="up"]').value,
+      down: document.querySelector('.candle-color[data-key="down"]').value,
+    };
+    saveCandleColors();
+    applyCandleColors();
     applyMa(maRows.map((row) => {
       let period = parseInt(row.querySelector('.ma-period').value, 10);
       if (!Number.isFinite(period) || period < 1) period = 1;
@@ -1229,6 +1298,9 @@
     closePanels();
   });
   $('settings-reset').addEventListener('click', () => {
+    candleColors = { ...DEFAULT_CANDLE_COLORS };
+    saveCandleColors();
+    applyCandleColors();
     applyMa(DEFAULT_MA.map((s) => ({ ...s })));
     fillMaPanel();
   });
@@ -1638,11 +1710,12 @@
         provider.ticker(m.symbol).catch(() => null),
       ]);
       if (req !== candleReq || id !== currentId) return;
+      ALL_DATA = candles;
       if (ticker) {
-        Object.assign(m, { price: ticker.price, change: ticker.change, volume: ticker.volume });
+        const change = changeFromCandles(ALL_DATA, ticker.price);
+        Object.assign(m, { price: ticker.price, change: change == null ? ticker.change : change, volume: ticker.volume });
         updateHeader();
       }
-      ALL_DATA = candles;
       setLoading(false);
       if (ALL_DATA.length) applyPrecision(ALL_DATA[ALL_DATA.length - 1].close);
       computeWaveTrend();
@@ -1685,7 +1758,8 @@
     try {
       const t = await PROVIDERS[m.exchange].ticker(m.symbol);
       if (!t || m.id !== currentId) return;
-      Object.assign(m, { price: t.price, change: t.change, volume: t.volume });
+      const change = changeFromCandles(ALL_DATA, t.price);
+      Object.assign(m, { price: t.price, change: change == null ? t.change : change, volume: t.volume });
       updateHeader();
       const last = ALL_DATA[ALL_DATA.length - 1];
       const today = Math.floor(Date.now() / 1000 / DAY) * DAY;

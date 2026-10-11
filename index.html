@@ -255,6 +255,9 @@
   }
   .dropdown-panel.hidden { display: none; }
   #favorites-panel { top: 52px; }
+  .m-row .reorder { display: flex; flex-direction: column; margin-left: 8px; flex: none; }
+  .m-row .reorder button { border: 0; background: none; color: var(--teal-deep, #2E7D74); font-size: 12px; line-height: 1; padding: 6px 8px; cursor: pointer; }
+  .m-row .reorder button:disabled { opacity: .25; cursor: default; }
   .panel-list { overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
   .settings-header {
     display: flex;
@@ -621,8 +624,8 @@
   </div>
 
   <div id="tf-row">
-    <button class="tf-btn" data-days="90">3M</button>
-    <button class="tf-btn active" data-days="365">1Y</button>
+    <button class="tf-btn active" data-days="90">3M</button>
+    <button class="tf-btn" data-days="365">1Y</button>
     <button class="tf-btn" data-days="730">2Y</button>
     <button class="tf-btn" data-days="99999">전체</button>
   </div>
@@ -639,7 +642,7 @@
   let MARKETS = [];     // [{id, exchange, symbol, base, quote, price, change, volume, fav}]
   let currentId = null;
   let ALL_DATA = [];    // [{time(UNIX 초), open, high, low, close}]
-  let currentDays = 365;
+  let currentDays = 90;
 
   // =================================================================
   // 1) 포맷 유틸
@@ -1151,21 +1154,40 @@
   // =================================================================
   function renderWatchlist() {
     const el = $('watchlist-list');
-    const favs = MARKETS.filter((m) => m.fav);
+    const byId = new Map(MARKETS.map((m) => [m.id, m]));
+    const favs = favIds.map((id) => byId.get(id)).filter((m) => m && m.fav);
     if (!favs.length) {
       el.innerHTML = '<div class="empty-msg">등록된 관심코인이 없어요.<br>우측 상단 ☆ 메뉴에서 관심코인을 추가해 주세요.</div>';
       return;
     }
     el.innerHTML = '';
-    favs.forEach((m) => {
+    favs.forEach((m, i) => {
       const row = document.createElement('div');
       row.className = 'm-row' + (m.id === currentId ? ' active' : '');
       row.innerHTML = marketLeftHTML(m) +
         '<div class="m-right"><div class="m-price">' + formatPrice(m.price) + '</div>' +
         '<div class="m-change ' + dirOf(m.change) + '">' + formatChange(m.change) + '</div></div>';
       row.addEventListener('click', () => selectMarket(m.id));
+      const mv = document.createElement('div');
+      mv.className = 'reorder';
+      [['▲', -1], ['▼', 1]].forEach(([t, d]) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = t;
+        b.disabled = (d < 0 && i === 0) || (d > 0 && i === favs.length - 1);
+        b.addEventListener('click', (e) => { e.stopPropagation(); moveFav(m.id, favs[i + d].id); });
+        mv.appendChild(b);
+      });
+      row.appendChild(mv);
       el.appendChild(row);
     });
+  }
+
+  function moveFav(a, b) {
+    const ia = favIds.indexOf(a), ib = favIds.indexOf(b);
+    if (ia < 0 || ib < 0) return;
+    [favIds[ia], favIds[ib]] = [favIds[ib], favIds[ia]];
+    lsSet(FAV_KEY, favIds);
+    renderWatchlist();
   }
 
   $('watchlist-btn').addEventListener('click', () => {
@@ -1242,7 +1264,8 @@
 
   function toggleFavorite(m) {
     m.fav = !m.fav;
-    favIds = MARKETS.filter((x) => x.fav).map((x) => x.id);
+    if (m.fav) { if (!favIds.includes(m.id)) favIds.push(m.id); }
+    else favIds = favIds.filter((id) => id !== m.id);
     lsSet(FAV_KEY, favIds);
     renderWatchlist();
   }

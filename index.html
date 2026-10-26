@@ -62,7 +62,7 @@
     font-weight: 700;
     color: var(--orange);
     margin-bottom: 2px;
-    padding-right: 40px;
+    padding-right: 84px;
   }
   .icon-btn {
     background: var(--panel);
@@ -83,6 +83,8 @@
   .icon-btn svg { width: 18px; height: 18px; }
   #favorites-btn { position: absolute; top: 14px; right: 16px; }
   #favorites-btn:active { color: var(--orange); border-color: var(--orange); }
+  #export-btn { position: absolute; top: 14px; right: 58px; }
+  #export-btn:active { color: var(--teal-deep); border-color: var(--teal-deep); }
 
   .symbol-line { display: flex; align-items: center; gap: 8px; }
   .symbol {
@@ -254,7 +256,19 @@
     flex-direction: column;
   }
   .dropdown-panel.hidden { display: none; }
-  #favorites-panel { top: 52px; }
+  #favorites-panel, #export-panel { top: 52px; }
+  .ex-target { display: flex; align-items: center; gap: 6px; padding: 2px 0 10px; flex-shrink: 0; }
+  .ex-body { overflow-y: auto; min-height: 0; }
+  .ex-body .exch-filter { flex-wrap: wrap; }
+  .exch-chip:disabled { opacity: .35; cursor: default; }
+  .exch-chip.sel { color: #fff; background: var(--teal-deep); border-color: var(--teal-deep); }
+  .ex-note { font-size: 12px; color: var(--sub); line-height: 1.55; padding: 4px 2px 0; }
+  .ex-note b { color: var(--ink); }
+  .ex-status { font-size: 12.5px; font-weight: 700; color: var(--teal-deep); padding: 8px 2px 0; min-height: 1em; }
+  .ex-status.err { color: var(--coral); }
+  #ex-get { background: var(--teal-deep); border-color: var(--teal-deep); color: #fff; }
+  #ex-save { background: var(--orange); border-color: var(--orange); color: #fff; }
+  #ex-get:disabled { opacity: .5; }
   .m-row .reorder { display: flex; flex-direction: column; margin-left: 8px; flex: none; }
   .m-row .reorder button { border: 0; background: none; color: var(--teal-deep, #2E7D74); font-size: 12px; line-height: 1; padding: 6px 8px; cursor: pointer; }
   .m-row .reorder button:disabled { opacity: .25; cursor: default; }
@@ -482,6 +496,12 @@
       </svg>
     </button>
 
+    <button id="export-btn" class="icon-btn" aria-label="CSV 내보내기">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>
+      </svg>
+    </button>
+
     <div class="symbol-line">
       <span class="symbol" id="symbol-name">—</span>
       <span class="exch-badge" id="symbol-exchange"></span>
@@ -515,6 +535,26 @@
              autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
       <div id="exch-filter" class="exch-filter hidden"></div>
       <div id="favorites-list" class="panel-list"></div>
+    </div>
+
+    <div id="export-panel" class="dropdown-panel hidden">
+      <div class="settings-header">
+        <span>CSV 내보내기 · Jc Trading Market용</span>
+        <button id="export-close" aria-label="닫기">✕</button>
+      </div>
+      <div class="ex-target" id="ex-target"></div>
+      <div class="ex-body">
+        <div class="settings-subhead">봉 간격</div>
+        <div class="exch-filter" id="ex-iv"></div>
+        <div class="settings-subhead">봉 개수</div>
+        <div class="exch-filter" id="ex-count"></div>
+        <div class="ex-note" id="ex-note"></div>
+        <div class="ex-status" id="ex-status"></div>
+      </div>
+      <div class="settings-actions">
+        <button id="ex-get">데이터 받기</button>
+        <button id="ex-save" hidden>CSV 저장</button>
+      </div>
     </div>
 
   </header>
@@ -636,7 +676,7 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const EXCHANGE_LABEL = { binance: 'Binance', backpack: 'Backpack', okx: 'OKX' };
+  const EXCHANGE_LABEL = { binance: 'Binance', backpack: 'Backpack', okx: 'OKX', hyperliquid: 'Hyperliquid', lighter: 'Lighter' };
 
   // 상태
   let MARKETS = [];     // [{id, exchange, symbol, base, quote, price, change, volume, fav}]
@@ -1123,7 +1163,7 @@
   // =================================================================
   // 5) 패널 공통
   // =================================================================
-  const PANELS = ['watchlist-panel', 'favorites-panel', 'settings-panel', 'osc-settings-panel'];
+  const PANELS = ['watchlist-panel', 'favorites-panel', 'settings-panel', 'osc-settings-panel', 'export-panel'];
   function openPanel(id) {
     const willOpen = $(id).classList.contains('hidden');
     PANELS.forEach((p) => $(p).classList.add('hidden'));
@@ -1351,6 +1391,9 @@
   // 10) 거래소 API (공개 시장데이터, 키 불필요)
   // =================================================================
   const DAY = 86400;
+  const IV_SEC = { '15m': 900, '1h': 3600, '4h': 14400, '1d': DAY };
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const newest = (byTime, count) => [...byTime.values()].sort((a, b) => a.time - b.time).slice(-count);
 
   function proxyBase() {
     const cfg = window.JC_CONFIG || {};
@@ -1368,11 +1411,11 @@
       .join('&');
   }
 
-  async function getJSON(url, timeoutMs = 15000) {
+  async function getJSON(url, timeoutMs = 15000, init = {}) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+      const res = await fetch(url, { ...init, signal: ctrl.signal, headers: { Accept: 'application/json', ...(init.headers || {}) } });
       if (!res.ok) {
         let detail = '';
         try { const body = await res.json(); detail = body.msg || body.message || ''; } catch (e) { /* ignore */ }
@@ -1452,6 +1495,27 @@
       return rows
         .map((k) => ({ time: Math.floor(k[0] / 1000), open: +k[1], high: +k[2], low: +k[3], close: +k[4] }))
         .filter((c) => c.close > 0);
+    },
+    // 내보내기용: 원하는 간격의 봉을 1000개씩 과거로 이어 받기
+    async history(symbol, iv, count, prog = () => {}) {
+      const byTime = new Map();
+      let endTime;
+      while (byTime.size < count) {
+        const params = { symbol, interval: iv, limit: 1000 };
+        if (endTime) params.endTime = endTime;
+        const rows = await this.get('/api/v3/klines', params);
+        if (!rows || !rows.length) break;
+        const before = byTime.size;
+        rows.forEach((k) => {
+          const time = Math.floor(k[0] / 1000);
+          byTime.set(time, { time, open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] || 0 });
+        });
+        prog(byTime.size);
+        if (byTime.size === before || rows.length < 1000) break;
+        endTime = rows[0][0] - 1;
+        await sleep(150);
+      }
+      return newest(byTime, count);
     },
   };
 
@@ -1552,6 +1616,27 @@
         start = end;
       }
       return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-count);
+    },
+    async history(symbol, iv, count, prog = () => {}) {
+      const sec = IV_SEC[iv];
+      const now = Math.floor(Date.now() / 1000);
+      const oldest = now - (count + 1) * sec;
+      const byTime = new Map();
+      let end = now;
+      while (byTime.size < count && end > oldest) {
+        const start = Math.max(oldest, end - 500 * sec);
+        const rows = await this.get('/api/v1/klines', { symbol, interval: iv, startTime: start, endTime: end });
+        const before = byTime.size;
+        (rows || []).forEach((k) => {
+          const time = parseTime(k.start);
+          if (time != null && +k.close > 0) byTime.set(time, { time, open: +k.open, high: +k.high, low: +k.low, close: +k.close, volume: +k.volume || 0 });
+        });
+        prog(byTime.size);
+        if (before > 0 && byTime.size === before) break; // 상장 이전 구간
+        end = start;
+        await sleep(150);
+      }
+      return newest(byTime, count);
     },
   };
 
@@ -1654,9 +1739,154 @@
       }
       return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-count);
     },
+    async history(symbol, iv, count, prog = () => {}) {
+      const bar = { '15m': '15m', '1h': '1H', '4h': '4H', '1d': '1Dutc' }[iv];
+      const byTime = new Map();
+      let after;
+      while (byTime.size < count) {
+        const params = { instId: symbol, bar, limit: '100' };
+        if (after) params.after = String(after);
+        const rows = await this.get('/api/v5/market/history-candles', params);
+        const data = (rows && rows.data) || [];
+        if (!data.length) break;
+        const before = byTime.size;
+        data.forEach((row) => {
+          const time = Math.floor(+row[0] / 1000);
+          byTime.set(time, { time, open: +row[1], high: +row[2], low: +row[3], close: +row[4], volume: +row[5] || 0 });
+        });
+        prog(byTime.size);
+        if (byTime.size === before) break;
+        after = Math.min(...data.map((row) => +row[0]));
+        await sleep(120); // IP당 2초에 20건 제한
+      }
+      return newest(byTime, count);
+    },
   };
 
-  const PROVIDERS = { binance: Binance, backpack: Backpack, okx: OKX };
+  // ---------- Hyperliquid (무기한 선물, USDC) ----------
+  // 브라우저에서 바로 호출 가능 (CORS 허용). 봉은 종목·간격마다 최근 5000개까지만 제공.
+  const Hyperliquid = {
+    id: 'hyperliquid',
+    url: 'https://api.hyperliquid.xyz/info',
+    maxBars: 5000,
+
+    post(body) {
+      return getJSON(this.url, 20000, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    },
+    async markets() {
+      const res = await this.post({ type: 'metaAndAssetCtxs' });
+      const universe = (res && res[0] && res[0].universe) || [];
+      const ctxs = (res && res[1]) || [];
+      return universe.map((u, i) => {
+        const c = ctxs[i];
+        if (!u || !c || u.isDelisted) return null;
+        const price = +c.midPx || +c.markPx;
+        const prev = +c.prevDayPx;
+        if (!(price > 0)) return null;
+        return {
+          id: 'hyperliquid:' + u.name, exchange: 'hyperliquid', symbol: u.name, base: u.name, quote: 'USDC PERP',
+          price, change: prev > 0 ? (price - prev) / prev * 100 : 0, volume: +c.dayNtlVlm || 0,
+        };
+      }).filter(Boolean);
+    },
+    async ticker(symbol) {
+      return (await this.markets()).find((m) => m.symbol === symbol) || null;
+    },
+    candles(symbol, limit) { return this.history(symbol, '1d', limit); },
+    async history(symbol, iv, count, prog = () => {}) {
+      const sec = IV_SEC[iv];
+      count = Math.min(count, this.maxBars);
+      const byTime = new Map();
+      let end = Date.now();
+      while (byTime.size < count) {
+        const start = end - (count - byTime.size + 1) * sec * 1000;
+        const rows = await this.post({ type: 'candleSnapshot', req: { coin: symbol, interval: iv, startTime: start, endTime: end } });
+        if (!rows || !rows.length) break;
+        const before = byTime.size;
+        rows.forEach((k) => {
+          const time = Math.floor(+k.t / 1000);
+          byTime.set(time, { time, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v || 0 });
+        });
+        prog(byTime.size);
+        if (byTime.size === before) break;
+        end = Math.min(...rows.map((k) => +k.t)) - 1;
+        await sleep(200);
+      }
+      return newest(byTime, count);
+    },
+  };
+
+  // ---------- Lighter (무기한 선물, USDC) ----------
+  // 브라우저에서 바로 호출 가능 (CORS 허용). 로그인 없이 IP당 1분 60회까지라 여러 번 나눠 받을 때는 0.4초씩 쉬어 갑니다 (1만 개도 21회).
+  const Lighter = {
+    id: 'lighter',
+    base: 'https://mainnet.zklighter.elliot.ai',
+    ids: {},
+
+    async get(path, params) {
+      const data = await getJSON(this.base + path + (params ? '?' + qs(params) : ''));
+      if (data && data.code != null && data.code !== 200) throw new HttpError(400, 'Lighter: ' + (data.message || ('오류 ' + data.code)));
+      return data;
+    },
+    toMarket(d) {
+      if (!d || !d.symbol || d.market_id == null) return null;
+      this.ids[d.symbol] = d.market_id;
+      if (d.status && d.status !== 'active') return null;
+      const price = +d.last_trade_price;
+      if (!(price > 0)) return null;
+      return {
+        id: 'lighter:' + d.symbol, exchange: 'lighter', symbol: d.symbol, base: d.symbol, quote: 'USDC PERP',
+        price, change: +d.daily_price_change || 0, volume: +d.daily_quote_token_volume || 0,
+      };
+    },
+    async markets() {
+      const r = await this.get('/api/v1/orderBookDetails');
+      return ((r && r.order_book_details) || []).map((d) => this.toMarket(d)).filter(Boolean);
+    },
+    async marketId(symbol) {
+      if (this.ids[symbol] == null) await this.markets();
+      if (this.ids[symbol] == null) throw new Error('Lighter에서 ' + symbol + ' 종목을 찾지 못했어요.');
+      return this.ids[symbol];
+    },
+    async ticker(symbol) {
+      const id = await this.marketId(symbol);
+      const r = await this.get('/api/v1/orderBookDetails', { market_id: id });
+      return this.toMarket(((r && r.order_book_details) || [])[0]);
+    },
+    candles(symbol, limit) { return this.history(symbol, '1d', limit); },
+    async history(symbol, iv, count, prog = () => {}) {
+      const id = await this.marketId(symbol);
+      const sec = IV_SEC[iv];
+      const byTime = new Map();
+      let end = Math.floor(Date.now() / 1000);
+      while (byTime.size < count) {
+        const n = Math.min(500, count - byTime.size + 1);
+        const start = (Math.floor(end / sec) - n + 1) * sec; // 봉 시작 시각에 맞춰야 오류가 나지 않음
+        let r;
+        try {
+          r = await this.get('/api/v1/candles', { market_id: id, resolution: iv, start_timestamp: start, end_timestamp: end, count_back: n });
+        } catch (e) {
+          if (byTime.size && !(e instanceof HttpError && e.status === 429)) break; // 상장 이전 구간
+          throw e;
+        }
+        const rows = (r && (r.c || r.candlesticks)) || [];
+        const before = byTime.size;
+        rows.forEach((k) => {
+          const t = +(k.t != null ? k.t : k.timestamp);
+          const time = t > 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+          const c = { time, open: +(k.o != null ? k.o : k.open), high: +(k.h != null ? k.h : k.high), low: +(k.l != null ? k.l : k.low), close: +(k.c != null ? k.c : k.close), volume: +(k.v != null ? k.v : k.volume0) || 0 };
+          if (Number.isFinite(time) && c.close > 0) byTime.set(time, c);
+        });
+        prog(byTime.size);
+        if (!rows.length || byTime.size === before) break;
+        end = start - 1;
+        if (byTime.size < count) await sleep(400);
+      }
+      return newest(byTime, count);
+    },
+  };
+
+  const PROVIDERS = { binance: Binance, backpack: Backpack, okx: OKX, hyperliquid: Hyperliquid, lighter: Lighter };
 
   // =================================================================
   // 11) 목록 / 캔들 로딩
@@ -1766,6 +1996,7 @@
     if (id === currentId && ALL_DATA.length) return;
     currentId = id;
     lsSet(LAST_KEY, id);
+    if (exReady && exReady.id !== id) exReset();
     updateHeader();
     ALL_DATA = [];
     render(currentDays);
@@ -1818,6 +2049,119 @@
     if (!currentId) return;
     showToast('새로고침 중…');
     refreshAll();
+  });
+
+  // =================================================================
+  // 12-1) CSV 내보내기: Jc Trading Market의 'CSV 불러오기'에 바로 넣을 수 있는 형식
+  //   time(UNIX 초),open,high,low,close,volume · 진행 중인 마지막 봉은 빼고 확정된 봉만
+  // =================================================================
+  const EX_KEY = 'jc-export-v1';
+  const EX_TAG = { binance: 'BN', backpack: 'BP', okx: 'OKX', hyperliquid: 'HL', lighter: 'LT' };
+  const EX_IVS = ['15m', '1h', '4h', '1d'];
+  const EX_COUNTS = [1000, 3000, 5000, 10000];
+  let exOpt = Object.assign({ iv: '1h', count: 3000 }, lsGet(EX_KEY, {}));
+  if (!IV_SEC[exOpt.iv]) exOpt.iv = '1h';
+  if (!EX_COUNTS.includes(exOpt.count)) exOpt.count = 3000;
+  let exBusy = false;
+  let exReady = null; // {name, text}
+
+  function exMax(m) { return m && PROVIDERS[m.exchange].maxBars || Infinity; }
+  function exFileName(m) {
+    const clean = (s) => String(s).replace(/ PERP$/, '').replace(/[^\w.-]/g, '');
+    const q = clean(m.quote);
+    const pair = /^USD[CT]?$/.test(q) ? clean(m.base) : clean(m.base) + '-' + q;
+    return EX_TAG[m.exchange] + '_' + pair + '_' + exOpt.iv + '.csv';
+  }
+  function exSpan(sec) {
+    const d = sec / DAY;
+    return d >= 365 ? '약 ' + (d / 365).toFixed(1).replace(/\.0$/, '') + '년치' : '약 ' + Math.round(d) + '일치';
+  }
+  function exStatus(msg, err) {
+    const el = $('ex-status');
+    el.textContent = msg || '';
+    el.classList.toggle('err', !!err);
+  }
+  function renderExport() {
+    const m = currentMarket();
+    $('ex-target').innerHTML = m ? marketLeftHTML(m) : '<span class="empty-msg">먼저 종목을 골라 주세요.</span>';
+    const max = exMax(m);
+    $('ex-iv').innerHTML = EX_IVS.map((iv) => '<button type="button" class="exch-chip' + (iv === exOpt.iv ? ' sel' : '') + '" data-iv="' + iv + '"' + (exBusy ? ' disabled' : '') + '>' + iv + '</button>').join('');
+    $('ex-count').innerHTML = EX_COUNTS.map((n) => '<button type="button" class="exch-chip' + (n === exOpt.count ? ' sel' : '') + '" data-n="' + n + '"' + (exBusy || n > max ? ' disabled' : '') + '>' + n.toLocaleString('en-US') + '개</button>').join('');
+    const n = Math.min(exOpt.count, max);
+    $('ex-note').innerHTML = m
+      ? '<b>' + escapeHtml(exFileName(m)) + '</b> · ' + exOpt.iv + ' 봉 ' + n.toLocaleString('en-US') + '개 (' + exSpan(n * IV_SEC[exOpt.iv]) + ')<br>' +
+        (max < Infinity ? 'Hyperliquid는 최근 ' + max.toLocaleString('en-US') + '개까지만 받을 수 있어요. ' : '') +
+        '거래소가 가진 기록이 짧으면 있는 만큼만 받아요. Market에서는 이 간격보다 큰 봉(예: 1h → 4h·1d)으로 묶어 볼 수 있어요.'
+      : '';
+    $('ex-get').disabled = !m || exBusy;
+    $('ex-get').textContent = exBusy ? '받는 중…' : (exReady ? '다시 받기' : '데이터 받기');
+    $('ex-save').hidden = !exReady;
+    if (exReady) $('ex-save').textContent = '저장: ' + exReady.name;
+  }
+  function exReset() { exReady = null; exStatus(''); }
+
+  $('export-btn').addEventListener('click', () => {
+    if (openPanel('export-panel')) {
+      if (exReady && exReady.id !== currentId) exReset();
+      renderExport();
+    }
+  });
+  $('export-close').addEventListener('click', closePanels);
+  $('export-panel').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-iv],[data-n]');
+    if (!b || b.disabled || exBusy) return;
+    if (b.dataset.iv) exOpt.iv = b.dataset.iv;
+    if (b.dataset.n) exOpt.count = +b.dataset.n;
+    lsSet(EX_KEY, exOpt);
+    exReset();
+    renderExport();
+  });
+
+  $('ex-get').addEventListener('click', async () => {
+    const m = currentMarket();
+    if (!m || exBusy) return;
+    const iv = exOpt.iv, sec = IV_SEC[iv], want = Math.min(exOpt.count, exMax(m));
+    exBusy = true; exReady = null; renderExport();
+    exStatus('받는 중… 0 / ' + want.toLocaleString('en-US') + '개');
+    try {
+      let rows = await PROVIDERS[m.exchange].history(m.symbol, iv, want + 1, (got) => {
+        exStatus('받는 중… ' + Math.min(got, want).toLocaleString('en-US') + ' / ' + want.toLocaleString('en-US') + '개');
+      });
+      const now = Math.floor(Date.now() / 1000);
+      rows = rows.filter((r) => r.time + sec <= now).slice(-want); // 진행 중인 봉 제외
+      if (rows.length < 3) throw new Error('받은 봉이 너무 적어요 (' + rows.length + '개).');
+      const text = 'time,open,high,low,close,volume\n' +
+        rows.map((r) => [r.time, r.open, r.high, r.low, r.close, r.volume].join(',')).join('\n') + '\n';
+      exReady = { id: m.id, name: exFileName(m), text };
+      const fmt = (t) => new Date(t * 1000).toLocaleString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+      exStatus(rows.length.toLocaleString('en-US') + '개 받음 · ' + fmt(rows[0].time) + ' ~ ' + fmt(rows[rows.length - 1].time) + '. 저장 버튼을 눌러 주세요.');
+    } catch (e) {
+      exStatus(e.message || '받지 못했어요.', true);
+    } finally {
+      exBusy = false;
+      renderExport();
+    }
+  });
+
+  // 저장은 버튼을 직접 누른 순간에 해야 iOS 공유 시트·다운로드가 막히지 않습니다.
+  $('ex-save').addEventListener('click', async () => {
+    if (!exReady) return;
+    const { name, text } = exReady;
+    const blob = new Blob([text], { type: 'text/csv' });
+    const standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    if (standalone && typeof File === 'function' && navigator.canShare) {
+      const file = new File([blob], name, { type: 'text/csv' });
+      if (navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: name }); exStatus('공유 시트에서 "파일에 저장"을 고르면 돼요.'); return; }
+        catch (e) { if (e && e.name === 'AbortError') return; }
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    exStatus(name + ' 저장했어요. Market의 JcMarket → CSV 불러오기로 올려 주세요.');
   });
 
   // =================================================================
